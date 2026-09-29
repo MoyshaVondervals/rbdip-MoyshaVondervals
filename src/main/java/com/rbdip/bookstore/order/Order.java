@@ -18,6 +18,8 @@ import java.time.Instant;
 @Table(name = "orders")
 public class Order {
 
+    static final String STATUS_NEW = "new";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

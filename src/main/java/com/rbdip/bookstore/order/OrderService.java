@@ -1,81 +1,59 @@
 package com.rbdip.bookstore.order;
 
-import com.rbdip.bookstore.product.Product;
-import com.rbdip.bookstore.product.ProductRepository;
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * God-класс: валидация, расчёт цены, персистентность и "уведомление
- * клиента" смешаны в одном методе. Цель для рефакторинга по SRP в ЛР1.
- */
 @Service
 public class OrderService {
 
-    private final ProductRepository productRepository;
+    private final CreateOrderRequestValidator validator;
+    private final OrderLineFactory orderLineFactory;
+    private final PricingCalculator pricingCalculator;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
-    private final PricingCalculator pricingCalculator = new PricingCalculator();
+    private final OrderNotifier orderNotifier;
 
     public OrderService(
-            ProductRepository productRepository,
+            CreateOrderRequestValidator validator,
+            OrderLineFactory orderLineFactory,
+            PricingCalculator pricingCalculator,
             OrderRepository orderRepository,
-            OrderItemRepository orderItemRepository) {
-        this.productRepository = productRepository;
+            OrderItemRepository orderItemRepository,
+            OrderNotifier orderNotifier) {
+        this.validator = validator;
+        this.orderLineFactory = orderLineFactory;
+        this.pricingCalculator = pricingCalculator;
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
+        this.orderNotifier = orderNotifier;
     }
 
     @Transactional
     public Order createOrder(CreateOrderRequest request) {
-        if (request.customerFullName() == null || request.customerFullName().isBlank()) {
-            throw new IllegalArgumentException("customerFullName is required");
-        }
-        if (request.customerAddress() == null || request.customerAddress().isBlank()) {
-            throw new IllegalArgumentException("customerAddress is required");
-        }
-        if (request.items() == null || request.items().isEmpty()) {
-            throw new IllegalArgumentException("order must contain at least one item");
-        }
+        validator.validate(request);
 
-        List<Product> products = new ArrayList<>();
-        List<PricingCalculator.LineItem> lineItems = new ArrayList<>();
-        for (CreateOrderRequest.Item raw : request.items()) {
-            Product product = productRepository.findById(raw.productId())
-                    .orElseThrow(() -> new IllegalArgumentException("product " + raw.productId() + " not found"));
-            int quantity = raw.quantity() == null ? 1 : raw.quantity();
-            if (quantity <= 0) {
-                throw new IllegalArgumentException("quantity must be positive");
-            }
-            products.add(product);
-            lineItems.add(new PricingCalculator.LineItem(product.getPrice(), quantity));
-        }
-
+        List<OrderLine> lines = orderLineFactory.createLines(request.items());
         BigDecimal total = pricingCalculator.calculateOrderTotal(
-                lineItems, request.customerType() == null ? "regular" : request.customerType(), request.couponCode());
+                lines.stream().map(OrderLine::toPricingLineItem).toList(),
+                customerTypeOf(request),
+                request.couponCode());
 
-        Order order = new Order(
-                request.customerFullName(), request.customerAddress(), request.customerPhone(), "new");
-        order = orderRepository.save(order);
-
-        for (int i = 0; i < products.size(); i++) {
-            Product product = products.get(i);
-            int quantity = lineItems.get(i).quantity();
-            orderItemRepository.save(new OrderItem(order.getId(), product.getName(), product.getPrice(), quantity));
+        Order order = orderRepository.save(new Order(
+                request.customerFullName(), request.customerAddress(), request.customerPhone(), Order.STATUS_NEW));
+        for (OrderLine line : lines) {
+            orderItemRepository.save(line.toOrderItem(order.getId()));
         }
 
-        sendConfirmationEmail(request.customerFullName(), order.getId(), total);
+        orderNotifier.orderPlaced(order, total);
 
         return order;
     }
 
-    private void sendConfirmationEmail(String customerName, Long orderId, BigDecimal total) {
-        // Реальный почтовый транспорт не настроен в учебном проекте - здесь
-        // просто эмулируется побочный эффект отправки письма.
-        System.out.printf(
-                "[email] Dear %s, your order #%d for %s has been placed.%n", customerName, orderId, total);
+    private static String customerTypeOf(CreateOrderRequest request) {
+        return request.customerType() == null
+                ? PricingCalculator.CUSTOMER_TYPE_REGULAR
+                : request.customerType();
     }
 }
