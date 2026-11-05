@@ -1,5 +1,7 @@
 package com.rbdip.bookstore.order;
 
+import com.rbdip.bookstore.customer.Customer;
+import com.rbdip.bookstore.customer.CustomerRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderNotifier orderNotifier;
+    private final CustomerRepository customerRepository;
 
     public OrderService(
             CreateOrderRequestValidator validator,
@@ -21,13 +24,15 @@ public class OrderService {
             PricingCalculator pricingCalculator,
             OrderRepository orderRepository,
             OrderItemRepository orderItemRepository,
-            OrderNotifier orderNotifier) {
+            OrderNotifier orderNotifier,
+            CustomerRepository customerRepository) {
         this.validator = validator;
         this.orderLineFactory = orderLineFactory;
         this.pricingCalculator = pricingCalculator;
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.orderNotifier = orderNotifier;
+        this.customerRepository = customerRepository;
     }
 
     @Transactional
@@ -40,8 +45,11 @@ public class OrderService {
                 customerTypeOf(request),
                 request.couponCode());
 
-        Order order = orderRepository.save(new Order(
-                request.customerFullName(), request.customerAddress(), request.customerPhone(), Order.STATUS_NEW));
+        Customer customer = customerRepository.findByFullNameAndAddressAndPhone(
+            request.customerFullName(),request.customerAddress(), request.customerPhone())
+            .orElseGet(() -> customerRepository.save(new Customer(request.customerFullName(),
+                    request.customerAddress(), request.customerPhone())));
+        Order order = orderRepository.save(new Order(customer, Order.STATUS_NEW));
         for (OrderLine line : lines) {
             orderItemRepository.save(line.toOrderItem(order.getId()));
         }
