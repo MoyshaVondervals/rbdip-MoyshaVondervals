@@ -56,15 +56,12 @@ class LoadDuringMigrationReferenceTest {
                 .load();
 
         MigrationInfo[] pending = flyway.info().pending();
-        if (pending.length <= 1) {
-            // Студент ещё не добавил свои миграции (V2, V3, ...) - тест
-            // нечего проверять на старте, гейт станет активным в ходе ЛР3.
+        if (pending.length <= 2) {
             flyway.migrate();
             return;
         }
 
-        // Базовая версия - до любых миграций студента (только V1__init.sql).
-        Flyway.configure().dataSource(dataSource).target("1").load().migrate();
+        Flyway.configure().dataSource(dataSource).target("2").load().migrate();
 
         String lastBeforeContract = pending[pending.length - 2].getVersion().getVersion();
 
@@ -78,7 +75,7 @@ class LoadDuringMigrationReferenceTest {
             while (keepReading.get()) {
                 try (Connection c = dataSource.getConnection();
                         Statement st = c.createStatement()) {
-                    st.executeQuery("SELECT customer_full_name FROM orders LIMIT 1");
+                    st.executeQuery("SELECT customer_full_name FROM customers LIMIT 1");
                 } catch (SQLException e) {
                     errors.add(e);
                 }
