@@ -25,7 +25,7 @@ class NormalizationMigrationTest {
         Flyway.configure().dataSource(dataSource).target("1").load().migrate();
         seedLegacyData(jdbc);
 
-        Flyway.configure().dataSource(dataSource).load().migrate();
+        Flyway.configure().dataSource(dataSource).target("2").load().migrate();
 
         assertThat(jdbc.queryForObject("SELECT count(*) FROM customers", Integer.class)).isEqualTo(3);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM orders", Integer.class)).isEqualTo(4);
@@ -46,7 +46,7 @@ class NormalizationMigrationTest {
         assertThat(jdbc.queryForObject("SELECT created_at::text FROM orders WHERE id = 1", String.class))
                 .isEqualTo("2020-01-02 03:04:05");
         assertConstraints(jdbc);
-        assertThat(Flyway.configure().dataSource(dataSource).load().migrate().migrationsExecuted).isZero();
+        assertThat(Flyway.configure().dataSource(dataSource).target("2").load().migrate().migrationsExecuted).isZero();
     }
 
     private static void seedLegacyData(JdbcTemplate jdbc) {

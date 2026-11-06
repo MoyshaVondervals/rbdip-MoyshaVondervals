@@ -55,7 +55,7 @@ class NormalizedOrderApiTest extends AbstractIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM orders", Integer.class)).isZero();
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM order_items", Integer.class)).isZero();
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM customers WHERE customer_full_name = 'Lab2 Invalid'", Integer.class)).isZero();
+                "SELECT count(*) FROM customers WHERE first_name = 'Lab2' AND last_name = 'Invalid'", Integer.class)).isZero();
     }
 
     private Long createProduct() {

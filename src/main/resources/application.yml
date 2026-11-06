@@ -13,6 +13,7 @@ spring:
       hibernate:
         generate_statistics: true
   flyway:
+    target: ${FLYWAY_TARGET:4}
     enabled: true
     baseline-on-migrate: true
 
